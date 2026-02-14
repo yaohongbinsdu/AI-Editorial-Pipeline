@@ -7,30 +7,13 @@ import {
   getPipelineRuns,
   triggerPipeline,
 } from '@/lib/api'
+import type { PipelineRun, StepStats } from '@/types'
 import { formatRelativeTime } from '@/lib/utils'
-
-interface PipelineRun {
-  id: string
-  started_at: string
-  completed_at: string | null
-  status: string
-  articles_discovered: number
-  articles_processed: number
-  articles_failed: number
-  duration_seconds: number | null
-}
-
-interface StepStat {
-  step_name: string
-  status: string
-  count: number
-  avg_duration_ms: number
-}
 
 export default function PipelinePage() {
   const [isRunning, setIsRunning] = useState(false)
   const [runs, setRuns] = useState<PipelineRun[]>([])
-  const [stepStats, setStepStats] = useState<StepStat[]>([])
+  const [stepStats, setStepStats] = useState<StepStats[]>([])
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
 

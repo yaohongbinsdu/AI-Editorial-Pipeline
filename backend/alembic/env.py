@@ -12,6 +12,7 @@ from app.models.article import Article  # noqa: F401
 from app.models.summary import Summary  # noqa: F401
 from app.models.cluster import Cluster  # noqa: F401
 from app.models.gravity_score import GravityScore  # noqa: F401
+from app.models.vector import Vector  # noqa: F401
 from app.models.pipeline_run import PipelineRun  # noqa: F401
 from app.models.pipeline_step_log import PipelineStepLog  # noqa: F401
 

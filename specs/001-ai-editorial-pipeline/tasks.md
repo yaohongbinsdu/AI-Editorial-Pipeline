@@ -360,6 +360,34 @@ Phase 1 → Phase 2 → US1 → US2 → US4 → US3 → US5 → Dashboard → Po
 
 ---
 
+## Phase 10: Frontend Optimization & End-to-End Verification
+
+**Purpose**: Fix all frontend pages so every navigation link works correctly, add missing pages, enable direct pipeline execution without Celery, verify RSS monitoring produces visible content, and add tests for all of it.
+
+**Goal**: 点击每个导航页面都能正确显示内容，RSS源能被真正监听并将内容展示在页面上，全部测试通过。
+
+### Implementation
+
+- [ ] T088 [P] Create `frontend/src/app/articles/page.tsx` — 文章列表页: 分页+过滤(category/status/sort), 使用ArticleCard组件, 空状态提示, 调用GET /articles API
+- [ ] T089 [P] Create `frontend/src/app/clusters/page.tsx` — 聚类列表页: 分页+category过滤, 使用ClusterGroup组件, 空状态提示, 调用GET /clusters API
+- [ ] T090 [P] Create `frontend/src/app/categories/page.tsx` — 行业分类索引页: 展示所有12个行业分类卡片(文章数+聚类数), 调用GET /categories API, 点击跳转到/categories/[slug]
+- [ ] T091 Update `frontend/src/app/layout.tsx` — 侧边栏导航优化: 提取为客户端SidebarNav组件支持active state高亮(usePathname), 行业分类链接改为/categories索引页, 响应式移动端支持
+- [ ] T092 Add direct pipeline trigger in `backend/app/api/routes/pipeline.py` — POST /pipeline/trigger 添加同步执行模式(sync=true参数), 直接调用run_pipeline而非依赖Celery worker, 使其在无Celery环境下也能运行
+- [ ] T093 [P] Create `frontend/src/app/not-found.tsx` — 全局404页面, 包含返回首页链接
+
+### Tests
+
+- [ ] T094 Create `backend/tests/integration/test_pipeline_trigger.py` — Pipeline同步触发测试: POST /pipeline/trigger?sync=true 返回202, 验证PipelineRun被创建, RSS源被实际拉取
+- [ ] T095 Create `backend/tests/integration/test_rss_fetch_e2e.py` — RSS抓取端到端测试: 插入测试RSS源, 调用run_pipeline, 验证articles表有新记录, 文章status正确
+- [ ] T096 Create `frontend/tests/e2e/navigation.spec.ts` — Playwright导航测试: 验证所有6个导航链接可点击且页面正确加载(Dashboard/文章/聚类/分类/RSS源/流水线), 无console error
+- [ ] T097 Create `frontend/tests/e2e/sources.spec.ts` — Playwright RSS源管理测试: 源列表显示已添加的46个源, 添加新源表单可用, 删除源确认对话框可用
+- [ ] T098 Create `frontend/tests/e2e/pipeline.spec.ts` — Playwright流水线测试: 手动触发按钮可点击, 触发后执行记录表格显示新记录, 步骤统计显示数据
+- [ ] T099 Create `backend/tests/integration/test_full_page_data.py` — 页面数据完整性测试: 验证GET /articles返回正确分页结构, GET /clusters返回列表, GET /categories返回12个分类, GET /sources返回已添加的源列表, GET /dashboard/overview和/trending返回正确结构
+
+**Checkpoint**: 所有前端页面可正常访问和显示数据, RSS源被真正监听, Pipeline可手动触发并产出文章, 全部测试通过
+
+---
+
 ## Notes
 
 - [P] tasks = different files, no dependencies

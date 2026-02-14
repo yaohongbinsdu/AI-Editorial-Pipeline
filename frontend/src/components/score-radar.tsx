@@ -44,7 +44,7 @@ const GROUP_COLORS: Record<string, string> = {
 export function ScoreRadar({ gravity }: ScoreRadarProps) {
   const data = DIMENSIONS.map((dim) => ({
     dimension: dim.label,
-    value: (gravity as Record<string, number>)[dim.key] ?? 0,
+    value: (gravity as unknown as Record<string, number>)[dim.key] ?? 0,
     fullMark: 10,
     group: dim.group,
   }))

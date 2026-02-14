@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SidebarNav } from '@/components/sidebar-nav'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -17,9 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="text-red-500">AI</span> Editorial
               </h1>
             </div>
-            <nav className="p-3">
-              {/* CategoryNav component will be placed here */}
-            </nav>
+            <SidebarNav />
           </aside>
           <main className="flex-1 overflow-auto">
             <div className="mx-auto max-w-7xl p-4 lg:p-6">{children}</div>

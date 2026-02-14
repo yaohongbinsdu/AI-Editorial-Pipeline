@@ -3,33 +3,11 @@
 import { useEffect, useState } from 'react'
 import { Activity, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { getPipelineStatus } from '@/lib/api'
+import type { PipelineStatus as PipelineStatusType } from '@/types'
 import { formatRelativeTime } from '@/lib/utils'
 
-interface PipelineStatusData {
-  is_running: boolean
-  current_run: {
-    id: string
-    started_at: string
-    status: string
-  } | null
-  last_completed_run: {
-    id: string
-    completed_at: string
-    articles_discovered: number
-    articles_processed: number
-    articles_failed: number
-    duration_ms: number
-  } | null
-  step_stats_24h: {
-    step_name: string
-    status: string
-    count: number
-    avg_duration_ms: number
-  }[]
-}
-
 export function PipelineStatus() {
-  const [data, setData] = useState<PipelineStatusData | null>(null)
+  const [data, setData] = useState<PipelineStatusType | null>(null)
 
   useEffect(() => {
     const load = async () => {

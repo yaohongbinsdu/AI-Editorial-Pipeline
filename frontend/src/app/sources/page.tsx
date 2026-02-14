@@ -143,7 +143,7 @@ export default function SourcesPage() {
         <div className="py-12 text-center text-sm text-zinc-500">加载中...</div>
       ) : sources.length === 0 ? (
         <div className="py-12 text-center text-sm text-zinc-500">
-          暂无RSS源，点击"添加源"开始
+          暂无RSS源，点击&ldquo;添加源&rdquo;开始
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-zinc-800">

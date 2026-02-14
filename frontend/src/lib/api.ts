@@ -16,7 +16,7 @@ import type {
   SimilarArticle,
 } from '@/types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`
@@ -147,5 +147,5 @@ export async function getPipelineRunDetail(runId: string): Promise<PipelineRunDe
 }
 
 export async function triggerPipeline(): Promise<{ run_id: string; message: string }> {
-  return fetchApi('/pipeline/trigger', { method: 'POST' })
+  return fetchApi('/pipeline/trigger?sync=true', { method: 'POST' })
 }

@@ -224,9 +224,8 @@ export interface PipelineRun {
 
 export interface StepStats {
   step_name: string
-  total: number
-  success: number
-  failed: number
+  status: string
+  count: number
   avg_duration_ms: number
 }
 

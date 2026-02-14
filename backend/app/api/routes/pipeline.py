@@ -124,8 +124,22 @@ async def get_pipeline_run_detail(run_id: str, db: DBSession):
 
 
 @router.post("/pipeline/trigger", status_code=202)
-async def trigger_pipeline(db: DBSession):
-    from app.tasks.workers import run_full_pipeline
+async def trigger_pipeline(db: DBSession, sync: bool = False):
+    if sync:
+        from app.services.pipeline import run_pipeline
 
-    task = run_full_pipeline.delay()
-    return {"task_id": task.id, "message": "Pipeline triggered"}
+        run = await run_pipeline(db)
+        await db.commit()
+        return {"run_id": str(run.id), "message": "Pipeline completed (sync)"}
+
+    try:
+        from app.tasks.workers import run_full_pipeline
+
+        task = run_full_pipeline.delay()
+        return {"task_id": task.id, "message": "Pipeline triggered (async)"}
+    except Exception:
+        from app.services.pipeline import run_pipeline
+
+        run = await run_pipeline(db)
+        await db.commit()
+        return {"run_id": str(run.id), "message": "Pipeline completed (sync fallback)"}
