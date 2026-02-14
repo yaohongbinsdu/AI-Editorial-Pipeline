@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import DBSession, Pagination
 from app.models.article import Article
 from app.models.gravity_score import GravityScore
+from app.models.rss_source import RSSSource
 from app.models.summary import Summary
 
 router = APIRouter()
@@ -21,7 +22,7 @@ def _article_brief(a: Article) -> dict:
         "final_title": a.final_title,
         "rewritten_title": summary.rewritten_title if summary else None,
         "human_tldr": summary.human_tldr if summary else None,
-        "category": summary.category if summary else None,
+        "category": summary.category if summary else (a.source.category if a.source else None),
         "tags": summary.tags if summary else [],
         "composite_score": gravity.composite_score if gravity else None,
         "editorial_vote": gravity.editorial_vote if gravity else None,
@@ -51,8 +52,10 @@ async def list_articles(
     )
 
     if category:
-        stmt = stmt.join(Summary, Article.id == Summary.article_id).where(
-            Summary.category == category
+        stmt = (
+            stmt.join(RSSSource, Article.source_id == RSSSource.id)
+            .outerjoin(Summary, Article.id == Summary.article_id)
+            .where(func.coalesce(Summary.category, RSSSource.category) == category)
         )
     if status:
         stmt = stmt.where(Article.status == status)
