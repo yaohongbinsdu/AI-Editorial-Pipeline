@@ -51,3 +51,14 @@ class ArticleStatusEnum(str, enum.Enum):
     FETCH_FAILED = "fetch_failed"
     SUMMARY_FAILED = "summary_failed"
     SCORE_FAILED = "score_failed"
+
+
+# Import all models so relationships resolve
+from app.models.rss_source import RSSSource  # noqa: E402, F401
+from app.models.article import Article  # noqa: E402, F401
+from app.models.summary import Summary  # noqa: E402, F401
+from app.models.vector import Vector  # noqa: E402, F401
+from app.models.cluster import Cluster  # noqa: E402, F401
+from app.models.gravity_score import GravityScore  # noqa: E402, F401
+from app.models.pipeline_run import PipelineRun  # noqa: E402, F401
+from app.models.pipeline_step_log import PipelineStepLog  # noqa: E402, F401

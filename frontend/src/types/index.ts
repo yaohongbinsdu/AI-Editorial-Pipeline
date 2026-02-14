@@ -250,3 +250,26 @@ export interface PipelineRunDetail {
   run: PipelineRun
   step_logs: StepLog[]
 }
+
+export interface GravityScoreDetail {
+  industry_impact: number
+  consumer_impact: number
+  actionability: number
+  risk_urgency: number
+  novelty: number
+  technical_depth: number
+  second_order_potential: number
+  builder_relevance: number
+  entertainment_value: number
+  signal_to_noise: number
+  viral_potential: number
+  early_trend_signal: number
+  pr_fluff: number
+  speculation: number
+  concreteness: number
+  paid_sponsorship: number
+  editorial_vote: string
+  novelty_gate: boolean
+  composite_score: number
+  reasoning: string
+}

@@ -43,7 +43,8 @@ export async function getDashboardOverview(hours = 24): Promise<DashboardOvervie
   return fetchApi(`/dashboard/overview${qs({ hours })}`)
 }
 
-export async function getTrending(limit = 10) {
+export { getDashboardTrending }
+async function getDashboardTrending(limit = 10) {
   return fetchApi<{ trending_clusters: ClusterBrief[]; trending_articles: ArticleBrief[] }>(
     `/dashboard/trending${qs({ limit })}`,
   )
