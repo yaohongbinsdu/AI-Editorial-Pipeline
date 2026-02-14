@@ -13,11 +13,11 @@ router = APIRouter()
 
 @router.get("/pipeline/status")
 async def get_pipeline_status(db: DBSession):
-    running_stmt = select(PipelineRun).where(PipelineRun.status == "running").order_by(PipelineRun.started_at.desc())
+    running_stmt = select(PipelineRun).where(PipelineRun.status == "running").order_by(PipelineRun.started_at.desc()).limit(1)
     running_result = await db.execute(running_stmt)
     current_run = running_result.scalar_one_or_none()
 
-    last_stmt = select(PipelineRun).where(PipelineRun.status == "completed").order_by(PipelineRun.completed_at.desc())
+    last_stmt = select(PipelineRun).where(PipelineRun.status == "completed").order_by(PipelineRun.completed_at.desc()).limit(1)
     last_result = await db.execute(last_stmt)
     last_completed = last_result.scalar_one_or_none()
 

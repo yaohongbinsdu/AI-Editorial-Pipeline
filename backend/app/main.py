@@ -6,11 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import articles, categories, clusters, dashboard, pipeline, sources
 from app.models import engine
+from app import scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    scheduler.start()
     yield
+    scheduler.stop()
     await engine.dispose()
 
 
