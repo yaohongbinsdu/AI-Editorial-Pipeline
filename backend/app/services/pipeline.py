@@ -15,6 +15,7 @@ from app.services.gravity_engine import GravityEngine
 from app.services.rss_fetcher import RSSFetcher
 from app.services.summarizer import Summarizer
 from app.services.vectorizer import Vectorizer
+from app.config import settings
 from app.utils.logging import get_logger
 
 logger = get_logger("pipeline")
@@ -76,10 +77,11 @@ async def run_pipeline(db: AsyncSession) -> PipelineRun:
             db, pipeline_run.id, None, "rss_fetch", "success",
             duration_ms=int((time.monotonic() - step_start) * 1000),
         )
-        await db.flush()
+        await db.commit()
     except Exception as exc:
         logger.error("rss_fetch_failed", error=str(exc))
         await _log_step(db, pipeline_run.id, None, "rss_fetch", "failed", error=str(exc))
+        await db.commit()
 
     # Step 2: Content Scrape
     scraper = ContentScraper()
@@ -98,57 +100,68 @@ async def run_pipeline(db: AsyncSession) -> PipelineRun:
                 error=str(exc),
             )
 
-    await db.flush()
+    await db.commit()
+    logger.info("content_scrape_committed", articles=len(new_articles))
 
-    # Step 3: Summarize
-    summarizer = Summarizer()
-    fetched_stmt = select(Article).where(Article.status == "fetched")
-    fetched_result = await db.execute(fetched_stmt)
-    fetched_articles = fetched_result.scalars().all()
+    # Step 3: Summarize — skip if no OPENAI_API_KEY
+    if not settings.OPENAI_API_KEY:
+        logger.warning("skipping_summarize", reason="OPENAI_API_KEY not set")
+        await _log_step(db, pipeline_run.id, None, "summarize", "skipped", error="OPENAI_API_KEY not set")
+    else:
+        summarizer = Summarizer()
+        fetched_stmt = select(Article).where(Article.status == "fetched")
+        fetched_result = await db.execute(fetched_stmt)
+        fetched_articles = fetched_result.scalars().all()
 
-    for article in fetched_articles:
-        try:
-            step_start = time.monotonic()
-            await summarizer.summarize_article(article, db)
-            await _log_step(
-                db, pipeline_run.id, article.id, "summarize", "success",
-                duration_ms=int((time.monotonic() - step_start) * 1000),
-            )
-            total_processed += 1
-        except Exception as exc:
-            total_failed += 1
-            await _log_step(
-                db, pipeline_run.id, article.id, "summarize", "failed",
-                error=str(exc),
-            )
+        for article in fetched_articles:
+            try:
+                step_start = time.monotonic()
+                await summarizer.summarize_article(article, db)
+                await _log_step(
+                    db, pipeline_run.id, article.id, "summarize", "success",
+                    duration_ms=int((time.monotonic() - step_start) * 1000),
+                )
+                total_processed += 1
+            except Exception as exc:
+                total_failed += 1
+                await _log_step(
+                    db, pipeline_run.id, article.id, "summarize", "failed",
+                    error=str(exc),
+                )
+        await db.flush()
 
-    await db.flush()
+    await db.commit()
 
-    # Step 4: Vectorize
-    vectorizer = Vectorizer()
-    summarized_stmt = select(Article).where(Article.status == "summarized")
-    summarized_result = await db.execute(summarized_stmt)
-    summarized_articles = summarized_result.scalars().all()
-
+    # Step 4: Vectorize — skip if no OPENAI_API_KEY
     embeddings: dict[str, list[float]] = {}
-    for article in summarized_articles:
-        try:
-            step_start = time.monotonic()
-            emb = await vectorizer.vectorize_article(str(article.id), db)
-            if emb:
-                embeddings[str(article.id)] = emb
-            await _log_step(
-                db, pipeline_run.id, article.id, "vectorize", "success",
-                duration_ms=int((time.monotonic() - step_start) * 1000),
-            )
-        except Exception as exc:
-            total_failed += 1
-            await _log_step(
-                db, pipeline_run.id, article.id, "vectorize", "failed",
-                error=str(exc),
-            )
+    if not settings.OPENAI_API_KEY:
+        logger.warning("skipping_vectorize", reason="OPENAI_API_KEY not set")
+        await _log_step(db, pipeline_run.id, None, "vectorize", "skipped", error="OPENAI_API_KEY not set")
+    else:
+        vectorizer = Vectorizer()
+        summarized_stmt = select(Article).where(Article.status == "summarized")
+        summarized_result = await db.execute(summarized_stmt)
+        summarized_articles = summarized_result.scalars().all()
 
-    await db.flush()
+        for article in summarized_articles:
+            try:
+                step_start = time.monotonic()
+                emb = await vectorizer.vectorize_article(str(article.id), db)
+                if emb:
+                    embeddings[str(article.id)] = emb
+                await _log_step(
+                    db, pipeline_run.id, article.id, "vectorize", "success",
+                    duration_ms=int((time.monotonic() - step_start) * 1000),
+                )
+            except Exception as exc:
+                total_failed += 1
+                await _log_step(
+                    db, pipeline_run.id, article.id, "vectorize", "failed",
+                    error=str(exc),
+                )
+        await db.flush()
+
+    await db.commit()
 
     # Step 5: Cluster
     clusterer = Clusterer(db)
@@ -177,26 +190,30 @@ async def run_pipeline(db: AsyncSession) -> PipelineRun:
 
     await db.flush()
 
-    # Step 6: Gravity Score
-    gravity = GravityEngine()
-    clustered_stmt = select(Article).where(Article.status == "clustered")
-    clustered_result = await db.execute(clustered_stmt)
-    clustered_articles = clustered_result.scalars().all()
+    # Step 6: Gravity Score — skip if no ANTHROPIC_API_KEY
+    if not settings.ANTHROPIC_API_KEY:
+        logger.warning("skipping_gravity_score", reason="ANTHROPIC_API_KEY not set")
+        await _log_step(db, pipeline_run.id, None, "gravity_score", "skipped", error="ANTHROPIC_API_KEY not set")
+    else:
+        gravity = GravityEngine()
+        clustered_stmt = select(Article).where(Article.status == "clustered")
+        clustered_result = await db.execute(clustered_stmt)
+        clustered_articles = clustered_result.scalars().all()
 
-    for article in clustered_articles:
-        try:
-            step_start = time.monotonic()
-            await gravity.score_and_update(article, db)
-            await _log_step(
-                db, pipeline_run.id, article.id, "gravity_score", "success",
-                duration_ms=int((time.monotonic() - step_start) * 1000),
-            )
-        except Exception as exc:
-            total_failed += 1
-            await _log_step(
-                db, pipeline_run.id, article.id, "gravity_score", "failed",
-                error=str(exc),
-            )
+        for article in clustered_articles:
+            try:
+                step_start = time.monotonic()
+                await gravity.score_and_update(article, db)
+                await _log_step(
+                    db, pipeline_run.id, article.id, "gravity_score", "success",
+                    duration_ms=int((time.monotonic() - step_start) * 1000),
+                )
+            except Exception as exc:
+                total_failed += 1
+                await _log_step(
+                    db, pipeline_run.id, article.id, "gravity_score", "failed",
+                    error=str(exc),
+                )
 
     # Finalize
     elapsed_ms = int((time.monotonic() - run_start) * 1000)

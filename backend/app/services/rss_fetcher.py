@@ -27,6 +27,7 @@ class RSSFetcher:
 
         logger.info("fetch_all_sources_start", source_count=len(sources))
 
+        self._seen_urls: set[str] = set()
         all_new_articles: list[Article] = []
         for source in sources:
             try:
@@ -71,7 +72,7 @@ class RSSFetcher:
         new_articles: list[Article] = []
         for entry in feed.entries:
             url = entry.get("link", "").strip()
-            if not url or url in existing_urls:
+            if not url or url in existing_urls or url in self._seen_urls:
                 continue
 
             published_at = None
@@ -106,6 +107,7 @@ class RSSFetcher:
             )
             self.db.add(article)
             new_articles.append(article)
+            self._seen_urls.add(url)
 
         logger.info(
             "fetch_source_done",
