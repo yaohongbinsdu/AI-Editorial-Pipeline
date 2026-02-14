@@ -1,0 +1,887 @@
+openapi: 3.1.0
+info:
+  title: AI Editorial Pipeline API
+  description: 全自动AI编辑部 REST API - 面向投资者的新闻聚合与智能分析平台
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+
+tags:
+  - name: Dashboard
+    description: 仪表盘聚合数据
+  - name: Articles
+    description: 文章CRUD与查询
+  - name: Clusters
+    description: 事件聚类
+  - name: Categories
+    description: 行业分类
+  - name: Sources
+    description: RSS源管理
+  - name: Pipeline
+    description: 流水线状态与监控
+
+paths:
+  # ── Dashboard ──────────────────────────────────────────
+  /dashboard/overview:
+    get:
+      tags: [Dashboard]
+      summary: 市场热点总览
+      description: |
+        返回首页所需的聚合数据：热门聚类、各行业文章计数、
+        趋势指标、最近高分文章。面向炒股用户的核心视图。
+      parameters:
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+          description: 时间窗口（小时）
+      responses:
+        "200":
+          description: 仪表盘总览数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardOverview"
+
+  /dashboard/trending:
+    get:
+      tags: [Dashboard]
+      summary: 实时趋势热点
+      description: 返回当前最热门的事件聚类和文章，按Gravity评分排序
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: 趋势热点列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trending_clusters:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClusterBrief"
+                  trending_articles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArticleBrief"
+
+  # ── Articles ───────────────────────────────────────────
+  /articles:
+    get:
+      tags: [Articles]
+      summary: 文章列表（分页+过滤）
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: 按行业分类过滤
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, fetching, fetched, summarizing, summarized, vectorizing, vectorized, scoring, completed, fetch_failed, summary_failed, score_failed]
+        - name: novelty_gate
+          in: query
+          schema:
+            type: boolean
+          description: 过滤通过/未通过Novelty Gate的文章
+        - name: editorial_vote
+          in: query
+          schema:
+            type: string
+            enum: [must_read, interesting, skip]
+        - name: min_score
+          in: query
+          schema:
+            type: number
+          description: 最低综合评分
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [composite_score, published_at, created_at]
+            default: composite_score
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: 分页文章列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedArticles"
+
+  /articles/{article_id}:
+    get:
+      tags: [Articles]
+      summary: 文章详情（含摘要+评分+聚类信息）
+      parameters:
+        - name: article_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 文章完整详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleDetail"
+        "404":
+          description: 文章不存在
+
+  /articles/{article_id}/similar:
+    get:
+      tags: [Articles]
+      summary: 相似文章推荐（基于向量相似度）
+      parameters:
+        - name: article_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+        - name: threshold
+          in: query
+          schema:
+            type: number
+            default: 0.75
+      responses:
+        "200":
+          description: 相似文章列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SimilarArticle"
+
+  # ── Clusters ───────────────────────────────────────────
+  /clusters:
+    get:
+      tags: [Clusters]
+      summary: 事件聚类列表
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: min_articles
+          in: query
+          schema:
+            type: integer
+            default: 2
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [article_count, last_updated_at, created_at]
+            default: last_updated_at
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: 聚类列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedClusters"
+
+  /clusters/{cluster_id}:
+    get:
+      tags: [Clusters]
+      summary: 聚类详情（含所有成员文章）
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 聚类详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterDetail"
+        "404":
+          description: 聚类不存在
+
+  # ── Categories ─────────────────────────────────────────
+  /categories:
+    get:
+      tags: [Categories]
+      summary: 所有行业分类及统计
+      responses:
+        "200":
+          description: 分类列表含文章数和热度
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryStats"
+
+  /categories/{slug}:
+    get:
+      tags: [Categories]
+      summary: 单个分类详情页数据
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: 分类页面数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryPage"
+
+  # ── Sources ────────────────────────────────────────────
+  /sources:
+    get:
+      tags: [Sources]
+      summary: RSS源列表
+      responses:
+        "200":
+          description: 所有RSS源
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RSSSource"
+    post:
+      tags: [Sources]
+      summary: 添加RSS源
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RSSSourceCreate"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RSSSource"
+        "409":
+          description: URL已存在
+
+  /sources/{source_id}:
+    patch:
+      tags: [Sources]
+      summary: 更新RSS源（启用/禁用/修改）
+      parameters:
+        - name: source_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RSSSourceUpdate"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RSSSource"
+    delete:
+      tags: [Sources]
+      summary: 删除RSS源
+      parameters:
+        - name: source_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: 删除成功
+
+  # ── Pipeline ───────────────────────────────────────────
+  /pipeline/status:
+    get:
+      tags: [Pipeline]
+      summary: 流水线当前状态
+      responses:
+        "200":
+          description: 流水线运行状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineStatus"
+
+  /pipeline/runs:
+    get:
+      tags: [Pipeline]
+      summary: 流水线执行历史
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        "200":
+          description: 执行记录列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineRun"
+
+  /pipeline/runs/{run_id}:
+    get:
+      tags: [Pipeline]
+      summary: 单次执行详情（含各步骤日志）
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 执行详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineRunDetail"
+
+  /pipeline/trigger:
+    post:
+      tags: [Pipeline]
+      summary: 手动触发一次流水线执行
+      responses:
+        "202":
+          description: 已触发
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+
+components:
+  schemas:
+    # ── Dashboard ──────────────────────────────────────
+    DashboardOverview:
+      type: object
+      properties:
+        time_window_hours:
+          type: integer
+        total_articles:
+          type: integer
+          description: 时间窗口内文章总数
+        category_breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryStats"
+        top_clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterBrief"
+          description: 热门事件聚类 (top 5)
+        must_read_articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArticleBrief"
+          description: editorial_vote=must_read 的文章
+        market_focus:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              heat_score:
+                type: number
+              article_count:
+                type: integer
+              top_keywords:
+                type: array
+                items:
+                  type: string
+          description: 市场关注热点（按行业板块，含热度分和关键词）
+        pipeline_health:
+          $ref: "#/components/schemas/PipelineHealth"
+
+    PipelineHealth:
+      type: object
+      properties:
+        last_run_at:
+          type: string
+          format: date-time
+        last_run_status:
+          type: string
+        success_rate_24h:
+          type: number
+        articles_processed_24h:
+          type: integer
+
+    # ── Article ────────────────────────────────────────
+    ArticleBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        final_title:
+          type: string
+        rewritten_title:
+          type: string
+        human_tldr:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        composite_score:
+          type: number
+        editorial_vote:
+          type: string
+        viral_potential:
+          type: number
+        published_at:
+          type: string
+          format: date-time
+        source_name:
+          type: string
+        final_image_url:
+          type: string
+          nullable: true
+
+    ArticleDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        original_url:
+          type: string
+        final_title:
+          type: string
+        final_content:
+          type: string
+        final_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+        author:
+          type: string
+          nullable: true
+        status:
+          type: string
+        source:
+          $ref: "#/components/schemas/RSSSourceBrief"
+        summary:
+          $ref: "#/components/schemas/SummaryData"
+        gravity_score:
+          $ref: "#/components/schemas/GravityScoreData"
+        cluster:
+          $ref: "#/components/schemas/ClusterBrief"
+          nullable: true
+
+    SimilarArticle:
+      type: object
+      properties:
+        article:
+          $ref: "#/components/schemas/ArticleBrief"
+        similarity:
+          type: number
+          description: 余弦相似度 (0-1)
+
+    SummaryData:
+      type: object
+      properties:
+        human_tldr:
+          type: string
+        vector_tldr:
+          type: string
+        key_points:
+          type: array
+          items:
+            type: string
+        rewritten_title:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    GravityScoreData:
+      type: object
+      properties:
+        industry_impact:
+          type: number
+        consumer_impact:
+          type: number
+        actionability:
+          type: number
+        risk_urgency:
+          type: number
+        novelty:
+          type: number
+        technical_depth:
+          type: number
+        second_order_potential:
+          type: number
+        builder_relevance:
+          type: number
+        entertainment_value:
+          type: number
+        signal_to_noise:
+          type: number
+        viral_potential:
+          type: number
+        early_trend_signal:
+          type: number
+        pr_fluff:
+          type: number
+        speculation:
+          type: number
+        concreteness:
+          type: number
+        paid_sponsorship:
+          type: number
+        editorial_vote:
+          type: string
+        novelty_gate:
+          type: boolean
+        composite_score:
+          type: number
+        reasoning:
+          type: string
+          nullable: true
+
+    PaginatedArticles:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArticleBrief"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+
+    # ── Cluster ────────────────────────────────────────
+    ClusterBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+        article_count:
+          type: integer
+        last_updated_at:
+          type: string
+          format: date-time
+        top_article:
+          $ref: "#/components/schemas/ArticleBrief"
+
+    ClusterDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+        article_count:
+          type: integer
+        expansion_triggered:
+          type: boolean
+        first_seen_at:
+          type: string
+          format: date-time
+        last_updated_at:
+          type: string
+          format: date-time
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArticleBrief"
+
+    PaginatedClusters:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterBrief"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+
+    # ── Category ───────────────────────────────────────
+    CategoryStats:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        article_count:
+          type: integer
+        cluster_count:
+          type: integer
+        heat_score:
+          type: number
+          description: 基于最近文章数量和评分的热度指标
+        trending_up:
+          type: boolean
+          description: 相比前一时间窗口是否上升
+
+    CategoryPage:
+      type: object
+      properties:
+        category:
+          $ref: "#/components/schemas/CategoryStats"
+        clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterBrief"
+        articles:
+          $ref: "#/components/schemas/PaginatedArticles"
+        top_keywords:
+          type: array
+          items:
+            type: string
+
+    # ── Source ─────────────────────────────────────────
+    RSSSource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        enabled:
+          type: boolean
+        fetch_interval_minutes:
+          type: integer
+        last_fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+        consecutive_failures:
+          type: integer
+
+    RSSSourceBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+
+    RSSSourceCreate:
+      type: object
+      required: [url, name, category]
+      properties:
+        url:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        fetch_interval_minutes:
+          type: integer
+          default: 60
+
+    RSSSourceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        enabled:
+          type: boolean
+        fetch_interval_minutes:
+          type: integer
+
+    # ── Pipeline ───────────────────────────────────────
+    PipelineStatus:
+      type: object
+      properties:
+        is_running:
+          type: boolean
+        current_run:
+          $ref: "#/components/schemas/PipelineRun"
+          nullable: true
+        last_completed_run:
+          $ref: "#/components/schemas/PipelineRun"
+          nullable: true
+        step_stats_24h:
+          type: array
+          items:
+            type: object
+            properties:
+              step_name:
+                type: string
+              total:
+                type: integer
+              success:
+                type: integer
+              failed:
+                type: integer
+              avg_duration_ms:
+                type: number
+
+    PipelineRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        articles_discovered:
+          type: integer
+        articles_processed:
+          type: integer
+        articles_failed:
+          type: integer
+        duration_seconds:
+          type: number
+          nullable: true
+
+    PipelineRunDetail:
+      type: object
+      properties:
+        run:
+          $ref: "#/components/schemas/PipelineRun"
+        step_logs:
+          type: array
+          items:
+            type: object
+            properties:
+              step_name:
+                type: string
+              article_id:
+                type: string
+                format: uuid
+                nullable: true
+              status:
+                type: string
+              duration_ms:
+                type: integer
+              error_message:
+                type: string
+                nullable: true
+              retry_count:
+                type: integer
